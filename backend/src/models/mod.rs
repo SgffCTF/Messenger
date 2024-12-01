@@ -41,3 +41,13 @@ pub struct DisplayUserData {
     pub nickname: String,
     pub last_seen: Option<chrono::NaiveDateTime>,
 }
+
+#[derive(Deserialize)]
+pub struct StartConvoData {
+    pub recipient_tag: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct ConversationResponse {
+    pub conversation_id: i32,
+}

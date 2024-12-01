@@ -5,7 +5,16 @@ use bcrypt::{ hash, DEFAULT_COST };
 use bcrypt::verify;
 use crate::{ db::DbPool, models::User };
 use crate::schema::users::{ self, tag, nickname, last_seen };
-use crate::models::{ DisplayUserData, LoginData, NewUser, RegisterData };
+use crate::schema::user_conversations;
+use crate::schema::conversations;
+use crate::models::{
+    DisplayUserData,
+    LoginData,
+    NewUser,
+    RegisterData,
+    StartConvoData,
+    ConversationResponse,
+};
 use chrono::Utc;
 
 pub async fn register_user(
@@ -75,6 +84,7 @@ pub async fn login_user(
                             Ok(_) => {
                                 // Сохраняем идентификатор пользователя в сессии
                                 session.insert("user_id", user.id).unwrap();
+                                println!("Session ID: {:?}", session.get::<i32>("user_id"));
                                 HttpResponse::Ok().body("Login successful")
                             }
                             Err(_) =>
@@ -104,27 +114,129 @@ pub async fn login_user(
     }
 }
 
-pub async fn get_users(pool: web::Data<DbPool>) -> HttpResponse {
-    let mut conn = pool.get().unwrap();
-    let result = users::table
-        .select((tag, nickname, last_seen))
-        .load::<(String, String, Option<chrono::NaiveDateTime>)>(&mut conn);
-
-    match result {
-        Ok(users_data) => {
-            let response: Vec<DisplayUserData> = users_data
-                .into_iter()
-                .map(|(_tag, _nickname, _last_seen)| DisplayUserData {
-                    tag: _tag,
-                    nickname: _nickname,
-                    last_seen: _last_seen,
-                })
-                .collect();
-
-            HttpResponse::Ok().json(response)
+pub async fn get_users(pool: web::Data<DbPool>, session: Session) -> HttpResponse {
+    // Проверяем, есть ли пользователь в сессии
+    let user_id: Option<i32> = match session.get("user_id") {
+        Ok(id) => id, // Успешно получили ID
+        Err(_) => {
+            return HttpResponse::InternalServerError().body("Failed to read session");
         }
-        Err(_) => { HttpResponse::InternalServerError().body("Error retrieving users") }
+    };
+    println!("Session ID: {:?}", session.get::<i32>("user_id"));
+
+    if let Some(_user_id) = user_id {
+        // Пользователь залогинен, продолжаем обработку
+        let mut conn = pool.get().unwrap();
+
+        // Запрашиваем пользователей
+        let result = users::table
+            .select((tag, nickname, last_seen))
+            .load::<(String, String, Option<chrono::NaiveDateTime>)>(&mut conn);
+
+        match result {
+            Ok(users_data) => {
+                let response: Vec<DisplayUserData> = users_data
+                    .into_iter()
+                    .map(|(_tag, _nickname, _last_seen)| DisplayUserData {
+                        tag: _tag,
+                        nickname: _nickname,
+                        last_seen: _last_seen,
+                    })
+                    .collect();
+
+                HttpResponse::Ok().json(response)
+            }
+            Err(_) => HttpResponse::InternalServerError().body("Error retrieving users"),
+        }
+    } else {
+        // Пользователь не залогинен
+
+        HttpResponse::Unauthorized().body("Unauthorized")
     }
 }
 
-pub async fn start_convo() {}
+pub async fn start_convo(
+    pool: web::Data<DbPool>,
+    session: Session,
+    data: web::Json<StartConvoData>
+) -> HttpResponse {
+    // Получаем ID текущего пользователя из сессии
+    let user_id: Option<i32> = match session.get("user_id") {
+        Ok(id) => id,
+        Err(_) => {
+            return HttpResponse::InternalServerError().body("Failed to read session");
+        }
+    };
+
+    if let Some(current_user_id) = user_id {
+        let mut conn = match pool.get() {
+            Ok(c) => c,
+            Err(_) => {
+                return HttpResponse::InternalServerError().body("Failed to connect to DB");
+            }
+        };
+
+        // Ищем получателя по тегу
+        let recipient = users::table
+            .filter(users::tag.eq(&data.recipient_tag))
+            .select(users::id)
+            .first::<i32>(&mut conn);
+
+        match recipient {
+            Ok(recipient_id) => {
+                // Проверяем, есть ли уже разговор между пользователями
+                let existing_convo = user_conversations::table
+                    .inner_join(conversations::table)
+                    .filter(user_conversations::user_id.eq(current_user_id))
+                    .filter(user_conversations::user_id.eq(recipient_id))
+                    .select(user_conversations::conversation_id)
+                    .first::<i32>(&mut conn)
+                    .optional();
+
+                match existing_convo {
+                    Ok(Some(convo_id)) => {
+                        // Уже существует разговор
+                        HttpResponse::Ok().json(ConversationResponse {
+                            conversation_id: convo_id,
+                        })
+                    }
+                    Ok(_) => {
+                        // Создаем новый разговор
+                        let new_convo_id: i32 = diesel
+                            ::insert_into(conversations::table)
+                            .default_values()
+                            .returning(conversations::id)
+                            .get_result(&mut conn)
+                            .expect("Failed to create conversation");
+
+                        // Добавляем обоих пользователей в таблицу user_conversations
+                        let user_convos = vec![
+                            (current_user_id, new_convo_id),
+                            (recipient_id, new_convo_id)
+                        ];
+
+                        for (user_id, convo_id) in user_convos {
+                            diesel
+                                ::insert_into(user_conversations::table)
+                                .values((
+                                    user_conversations::user_id.eq(user_id),
+                                    user_conversations::conversation_id.eq(convo_id),
+                                ))
+                                .execute(&mut conn)
+                                .expect("Failed to associate user with conversation");
+                        }
+
+                        HttpResponse::Created().json(ConversationResponse {
+                            conversation_id: new_convo_id,
+                        })
+                    }
+                    Err(_) =>
+                        HttpResponse::InternalServerError().body("Error checking conversation"),
+                }
+            }
+            Err(_) => HttpResponse::NotFound().body("Recipient not found"),
+        }
+    } else {
+        HttpResponse::Unauthorized().body("Unauthorized")
+    }
+}
