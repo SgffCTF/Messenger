@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS conversations (
     id SERIAL PRIMARY KEY,
-    title TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
