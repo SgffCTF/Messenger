@@ -119,6 +119,10 @@ pub async fn login_user(
     }
 }
 
+pub async fn health(time: web::Data<u64>) -> HttpResponse {
+    HttpResponse::Ok().body(format!("Healthy, {}", *time))
+}
+
 pub async fn get_users(pool: web::Data<DbPool>, session: Session) -> HttpResponse {
     // Проверяем, есть ли пользователь в сессии
     let user_tag: Option<String> = match session.get("user_tag") {

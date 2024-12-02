@@ -1,6 +1,5 @@
 use actix_web::{ web, App, HttpServer };
 use actix_session::{ SessionMiddleware, storage::CookieSessionStore };
-use actix_web::cookie::Key;
 use dotenv::dotenv;
 
 mod db;
@@ -12,16 +11,20 @@ mod utils;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
-    let session_key = Key::generate();
+    let start_server = chrono::Utc::now().timestamp() as u64;
 
     let pool = db::establish_connection();
     println!("Server started at https://0.0.0.0:8080");
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(pool.clone()))
+            .app_data(web::Data::new(start_server.clone()))
             .wrap(
-                SessionMiddleware::builder(CookieSessionStore::default(), session_key.clone())
-                    .cookie_content_security(actix_session::config::CookieContentSecurity::Private)
+                SessionMiddleware::builder(
+                    CookieSessionStore::default(),
+                    utils::generate_session_key(start_server)
+                )
+                    .cookie_content_security(actix_session::config::CookieContentSecurity::Signed)
                     .cookie_secure(false)
                     .build()
             )
@@ -32,10 +35,7 @@ async fn main() -> std::io::Result<()> {
             .route("/convos", web::get().to(handlers::get_convos))
             .route("/convo/{convo_id}", web::post().to(handlers::send_message))
             .route("/convo/{convo_id}", web::get().to(handlers::get_messages))
-            .route(
-                "/health",
-                web::get().to(|| async { "Healthy" })
-            )
+            .route("/health", web::get().to(handlers::health))
     })
         .bind("0.0.0.0:8080")?
         .run().await
