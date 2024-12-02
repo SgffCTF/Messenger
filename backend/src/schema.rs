@@ -27,6 +27,16 @@ table! {
     }
 }
 
+table! {
+    messages (id) {
+        id -> Int4,
+        conversation_id -> Int4,
+        sender_id -> Int4,
+        content -> Text,
+        sent_at -> Timestamp,
+    }
+}
+
 // Указываем связь между user_conversations и conversations
 joinable!(user_conversations -> conversations (conversation_id));
 

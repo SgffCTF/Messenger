@@ -7,6 +7,7 @@ use crate::{ db::DbPool, models::User };
 use crate::schema::users::{ self, tag, nickname, last_seen };
 use crate::schema::user_conversations;
 use crate::schema::conversations;
+use crate::schema::messages;
 use crate::models::{
     DisplayUserData,
     LoginData,
@@ -14,6 +15,10 @@ use crate::models::{
     RegisterData,
     StartConvoData,
     ConversationResponse,
+    MessageData,
+    NewMessage,
+    Message,
+    ConversationInfo,
 };
 use chrono::Utc;
 
@@ -84,7 +89,6 @@ pub async fn login_user(
                             Ok(_) => {
                                 // Сохраняем идентификатор пользователя в сессии
                                 session.insert("user_id", user.id).unwrap();
-                                println!("Session ID: {:?}", session.get::<i32>("user_id"));
                                 HttpResponse::Ok().body("Login successful")
                             }
                             Err(_) =>
@@ -122,7 +126,6 @@ pub async fn get_users(pool: web::Data<DbPool>, session: Session) -> HttpRespons
             return HttpResponse::InternalServerError().body("Failed to read session");
         }
     };
-    println!("Session ID: {:?}", session.get::<i32>("user_id"));
 
     if let Some(_user_id) = user_id {
         // Пользователь залогинен, продолжаем обработку
@@ -196,6 +199,7 @@ pub async fn start_convo(
                 match existing_convo {
                     Ok(Some(convo_id)) => {
                         // Уже существует разговор
+                        session.insert("convo_id", convo_id).unwrap();
                         HttpResponse::Ok().json(ConversationResponse {
                             conversation_id: convo_id,
                         })
@@ -225,7 +229,7 @@ pub async fn start_convo(
                                 .execute(&mut conn)
                                 .expect("Failed to associate user with conversation");
                         }
-
+                        session.insert("convo_id", new_convo_id).unwrap();
                         HttpResponse::Created().json(ConversationResponse {
                             conversation_id: new_convo_id,
                         })
@@ -236,6 +240,146 @@ pub async fn start_convo(
             }
             Err(_) => HttpResponse::NotFound().body("Recipient not found"),
         }
+    } else {
+        HttpResponse::Unauthorized().body("Unauthorized")
+    }
+}
+
+pub async fn get_convos(pool: web::Data<DbPool>, session: Session) -> HttpResponse {
+    let mut conn = pool.get().unwrap();
+    let user_id: Option<i32> = match session.get("user_id") {
+        Ok(id) => id,
+        Err(_) => {
+            return HttpResponse::InternalServerError().body("Failed to read session");
+        }
+    };
+
+    if let Some(current_user_id) = user_id {
+        // Получаем все переписки пользователя
+        let convos = user_conversations::table
+            .inner_join(conversations::table)
+            .filter(user_conversations::user_id.eq(current_user_id))
+            .select(conversations::id)
+            .load::<i32>(&mut conn);
+
+        match convos {
+            Ok(convo_ids) => {
+                let mut convo_info: Vec<ConversationInfo> = Vec::new();
+
+                for convo_id in convo_ids {
+                    // Получаем последнее сообщение в переписке
+                    let last_message = messages::table
+                        .filter(messages::conversation_id.eq(convo_id))
+                        .order(messages::sent_at.desc())
+                        .first::<Message>(&mut conn)
+                        .optional()
+                        .unwrap();
+
+                    // Получаем другого участника переписки
+                    let other_participant = user_conversations::table
+                        .inner_join(users::table)
+                        .filter(user_conversations::conversation_id.eq(convo_id))
+                        .filter(user_conversations::user_id.ne(current_user_id))
+                        .select((users::tag, users::nickname))
+                        .first::<(String, String)>(&mut conn)
+                        .unwrap();
+
+                    convo_info.push(ConversationInfo {
+                        id: convo_id,
+                        participant_tag: other_participant.0,
+                        participant_nickname: other_participant.1,
+                        last_message: last_message.as_ref().map(|msg| msg.content.clone()),
+                        last_message_time: last_message.as_ref().map(|msg| msg.sent_at.clone()),
+                    });
+                }
+
+                HttpResponse::Ok().json(convo_info)
+            }
+            Err(_) => HttpResponse::InternalServerError().body("Error retrieving conversations"),
+        }
+    } else {
+        HttpResponse::Unauthorized().body("Unauthorized")
+    }
+}
+
+pub async fn send_message(
+    pool: web::Data<DbPool>,
+    session: Session,
+    path: web::Path<i32>,
+    data: web::Json<MessageData>
+) -> HttpResponse {
+    let mut conn = pool.get().unwrap();
+    let user_id: Option<i32> = match session.get("user_id") {
+        Ok(id) => id,
+        Err(_) => {
+            return HttpResponse::InternalServerError().body("Failed to read session");
+        }
+    };
+
+    let convo_id = path.into_inner();
+
+    if let Some(current_user_id) = user_id {
+        // Проверяем, принадлежит ли пользователь к этой переписке
+        let user_in_convo = user_conversations::table
+            .filter(user_conversations::user_id.eq(current_user_id))
+            .filter(user_conversations::conversation_id.eq(convo_id))
+            .first::<(i32, i32)>(&mut conn)
+            .optional()
+            .unwrap();
+
+        if user_in_convo.is_none() {
+            return HttpResponse::Forbidden().body("You don't have access to this conversation");
+        }
+
+        let message = NewMessage {
+            sender_id: current_user_id,
+            conversation_id: convo_id,
+            content: data.content.clone(),
+        };
+
+        diesel::insert_into(messages::table).values(&message).execute(&mut conn).unwrap();
+
+        HttpResponse::Created().body("Message sent")
+    } else {
+        HttpResponse::Unauthorized().body("Unauthorized")
+    }
+}
+
+pub async fn get_messages(
+    pool: web::Data<DbPool>,
+    session: Session,
+    path: web::Path<i32>
+) -> HttpResponse {
+    let mut conn = pool.get().unwrap();
+    let user_id: Option<i32> = match session.get("user_id") {
+        Ok(id) => id,
+        Err(_) => {
+            return HttpResponse::InternalServerError().body("Failed to read session");
+        }
+    };
+
+    let convo_id = path.into_inner();
+
+    if let Some(current_user_id) = user_id {
+        // Проверяем, принадлежит ли пользователь к этой переписке
+        let user_in_convo = user_conversations::table
+            .filter(user_conversations::user_id.eq(current_user_id))
+            .filter(user_conversations::conversation_id.eq(convo_id))
+            .first::<(i32, i32)>(&mut conn)
+            .optional()
+            .unwrap();
+
+        if user_in_convo.is_none() {
+            return HttpResponse::Forbidden().body("You don't have access to this conversation");
+        }
+
+        // Получаем сообщения
+        let messages = messages::table
+            .filter(messages::conversation_id.eq(convo_id))
+            .load::<Message>(&mut conn)
+            .unwrap();
+
+        HttpResponse::Ok().json(messages)
     } else {
         HttpResponse::Unauthorized().body("Unauthorized")
     }

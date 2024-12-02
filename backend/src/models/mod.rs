@@ -1,6 +1,7 @@
 use serde::{ Deserialize, Serialize };
 use diesel::{ Queryable, Insertable };
 use crate::schema::users;
+use crate::schema::messages;
 
 #[derive(Serialize, Deserialize, Queryable, Insertable)]
 #[diesel(table_name = users)]
@@ -50,4 +51,36 @@ pub struct StartConvoData {
 #[derive(serde::Serialize)]
 pub struct ConversationResponse {
     pub conversation_id: i32,
+}
+
+#[derive(Deserialize)]
+pub struct MessageData {
+    pub content: String,
+}
+
+#[derive(Serialize, Deserialize, Queryable, Insertable)]
+#[diesel(table_name = messages)]
+pub struct NewMessage {
+    pub conversation_id: i32,
+    pub sender_id: i32,
+    pub content: String,
+}
+
+#[derive(Serialize, Deserialize, Queryable, Insertable)]
+#[diesel(table_name = messages)]
+pub struct Message {
+    pub id: i32,
+    pub conversation_id: i32,
+    pub sender_id: i32,
+    pub content: String,
+    pub sent_at: chrono::NaiveDateTime,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ConversationInfo {
+    pub id: i32,
+    pub participant_tag: String,
+    pub participant_nickname: String,
+    pub last_message: Option<String>,
+    pub last_message_time: Option<chrono::NaiveDateTime>,
 }

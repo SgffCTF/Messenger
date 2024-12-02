@@ -28,6 +28,9 @@ async fn main() -> std::io::Result<()> {
             .route("/login", web::post().to(handlers::login_user))
             .route("/users", web::get().to(handlers::get_users))
             .route("/start_convo", web::post().to(handlers::start_convo))
+            .route("/convos", web::get().to(handlers::get_convos))
+            .route("/convo/{convo_id}/send", web::post().to(handlers::send_message))
+            .route("/convo/{convo_id}/messages", web::post().to(handlers::get_messages))
             .route(
                 "/health",
                 web::get().to(|| async { "Healthy" })
