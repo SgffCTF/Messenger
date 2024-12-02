@@ -7,6 +7,7 @@ mod db;
 mod models;
 mod schema;
 mod handlers;
+mod utils;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -29,8 +30,8 @@ async fn main() -> std::io::Result<()> {
             .route("/users", web::get().to(handlers::get_users))
             .route("/start_convo", web::post().to(handlers::start_convo))
             .route("/convos", web::get().to(handlers::get_convos))
-            .route("/convo/{convo_id}/send", web::post().to(handlers::send_message))
-            .route("/convo/{convo_id}/messages", web::post().to(handlers::get_messages))
+            .route("/convo/{convo_id}", web::post().to(handlers::send_message))
+            .route("/convo/{convo_id}", web::get().to(handlers::get_messages))
             .route(
                 "/health",
                 web::get().to(|| async { "Healthy" })

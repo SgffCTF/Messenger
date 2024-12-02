@@ -20,6 +20,7 @@ use crate::models::{
     Message,
     ConversationInfo,
 };
+use crate::utils::get_user_id_by_tag;
 use chrono::Utc;
 
 pub async fn register_user(
@@ -88,7 +89,7 @@ pub async fn login_user(
                         match updated_user {
                             Ok(_) => {
                                 // Сохраняем идентификатор пользователя в сессии
-                                session.insert("user_id", user.id).unwrap();
+                                session.insert("user_tag", user.tag).unwrap();
                                 HttpResponse::Ok().body("Login successful")
                             }
                             Err(_) =>
@@ -120,14 +121,14 @@ pub async fn login_user(
 
 pub async fn get_users(pool: web::Data<DbPool>, session: Session) -> HttpResponse {
     // Проверяем, есть ли пользователь в сессии
-    let user_id: Option<i32> = match session.get("user_id") {
-        Ok(id) => id, // Успешно получили ID
+    let user_tag: Option<String> = match session.get("user_tag") {
+        Ok(user_tag) => user_tag, // Успешно получили тег
         Err(_) => {
             return HttpResponse::InternalServerError().body("Failed to read session");
         }
     };
 
-    if let Some(_user_id) = user_id {
+    if let Some(_current_user_tag) = user_tag {
         // Пользователь залогинен, продолжаем обработку
         let mut conn = pool.get().unwrap();
 
@@ -164,14 +165,20 @@ pub async fn start_convo(
     data: web::Json<StartConvoData>
 ) -> HttpResponse {
     // Получаем ID текущего пользователя из сессии
-    let user_id: Option<i32> = match session.get("user_id") {
-        Ok(id) => id,
+    let user_tag: Option<String> = match session.get("user_tag") {
+        Ok(user_tag) => user_tag,
         Err(_) => {
             return HttpResponse::InternalServerError().body("Failed to read session");
         }
     };
 
-    if let Some(current_user_id) = user_id {
+    if let Some(current_user_tag) = user_tag {
+        let current_user_id = match get_user_id_by_tag(&pool, &current_user_tag).await {
+            Ok(id) => id,
+            Err(_) => {
+                return HttpResponse::InternalServerError().body("Failed to get user ID");
+            }
+        };
         let mut conn = match pool.get() {
             Ok(c) => c,
             Err(_) => {
@@ -246,15 +253,21 @@ pub async fn start_convo(
 }
 
 pub async fn get_convos(pool: web::Data<DbPool>, session: Session) -> HttpResponse {
-    let mut conn = pool.get().unwrap();
-    let user_id: Option<i32> = match session.get("user_id") {
-        Ok(id) => id,
+    let user_tag: Option<String> = match session.get("user_tag") {
+        Ok(user_tag) => user_tag,
         Err(_) => {
             return HttpResponse::InternalServerError().body("Failed to read session");
         }
     };
 
-    if let Some(current_user_id) = user_id {
+    if let Some(current_user_tag) = user_tag {
+        let mut conn = pool.get().unwrap();
+        let current_user_id = match get_user_id_by_tag(&pool, &current_user_tag).await {
+            Ok(id) => id,
+            Err(_) => {
+                return HttpResponse::InternalServerError().body("Failed to get user ID");
+            }
+        };
         // Получаем все переписки пользователя
         let convos = user_conversations::table
             .inner_join(conversations::table)
@@ -308,9 +321,8 @@ pub async fn send_message(
     path: web::Path<i32>,
     data: web::Json<MessageData>
 ) -> HttpResponse {
-    let mut conn = pool.get().unwrap();
-    let user_id: Option<i32> = match session.get("user_id") {
-        Ok(id) => id,
+    let user_tag: Option<String> = match session.get("user_tag") {
+        Ok(user_tag) => user_tag,
         Err(_) => {
             return HttpResponse::InternalServerError().body("Failed to read session");
         }
@@ -318,7 +330,14 @@ pub async fn send_message(
 
     let convo_id = path.into_inner();
 
-    if let Some(current_user_id) = user_id {
+    if let Some(current_user_tag) = user_tag {
+        let mut conn = pool.get().unwrap();
+        let current_user_id = match get_user_id_by_tag(&pool, &current_user_tag).await {
+            Ok(id) => id,
+            Err(_) => {
+                return HttpResponse::InternalServerError().body("Failed to get user ID");
+            }
+        };
         // Проверяем, принадлежит ли пользователь к этой переписке
         let user_in_convo = user_conversations::table
             .filter(user_conversations::user_id.eq(current_user_id))
@@ -350,9 +369,8 @@ pub async fn get_messages(
     session: Session,
     path: web::Path<i32>
 ) -> HttpResponse {
-    let mut conn = pool.get().unwrap();
-    let user_id: Option<i32> = match session.get("user_id") {
-        Ok(id) => id,
+    let user_tag: Option<String> = match session.get("user_tag") {
+        Ok(user_tag) => user_tag,
         Err(_) => {
             return HttpResponse::InternalServerError().body("Failed to read session");
         }
@@ -360,7 +378,14 @@ pub async fn get_messages(
 
     let convo_id = path.into_inner();
 
-    if let Some(current_user_id) = user_id {
+    if let Some(current_user_tag) = user_tag {
+        let mut conn = pool.get().unwrap();
+        let current_user_id = match get_user_id_by_tag(&pool, &current_user_tag).await {
+            Ok(id) => id,
+            Err(_) => {
+                return HttpResponse::InternalServerError().body("Failed to get user ID");
+            }
+        };
         // Проверяем, принадлежит ли пользователь к этой переписке
         let user_in_convo = user_conversations::table
             .filter(user_conversations::user_id.eq(current_user_id))
