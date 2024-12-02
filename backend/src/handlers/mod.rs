@@ -119,8 +119,8 @@ pub async fn login_user(
     }
 }
 
-pub async fn health(time: web::Data<u64>) -> HttpResponse {
-    HttpResponse::Ok().body(format!("Healthy, {}", *time))
+pub async fn health(data: web::Data<u64>) -> HttpResponse {
+    HttpResponse::Ok().body(format!("Healthy, {}", *data))
 }
 
 pub async fn get_users(pool: web::Data<DbPool>, session: Session) -> HttpResponse {
