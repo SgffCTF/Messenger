@@ -13,3 +13,5 @@ diesel = { version = "2.0", features = ["postgres", "r2d2", "chrono", "serde_jso
 dotenv = "0.15"
 bcrypt = "0.12"
 tokio = { version = "1", features = ["full"] }
+zip = "0.6"
+sha2 = "0.10"

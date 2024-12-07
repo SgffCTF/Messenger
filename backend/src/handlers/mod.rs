@@ -3,6 +3,11 @@ use actix_web::{ web, HttpResponse };
 use actix_session::Session;
 use bcrypt::{ hash, DEFAULT_COST };
 use bcrypt::verify;
+use sha2::{ Sha256, Digest };
+use std::fs::{ self, File };
+use std::io::{ Read, Write };
+use std::path::Path;
+use zip::write::FileOptions;
 use crate::{ db::DbPool, models::User };
 use crate::schema::users::{ self, tag, nickname, last_seen };
 use crate::schema::user_conversations;
@@ -412,4 +417,109 @@ pub async fn get_messages(
     } else {
         HttpResponse::Unauthorized().body("Unauthorized")
     }
+}
+
+pub async fn backup_convo(pool: web::Data<DbPool>, path: web::Path<i32>) -> HttpResponse {
+    let convo_id = path.into_inner();
+    let mut conn = pool.get().unwrap();
+
+    // Получаем теги участников переписки
+    let user_tags: Vec<String> = match
+        user_conversations::table
+            .filter(user_conversations::conversation_id.eq(convo_id))
+            .inner_join(users::table.on(users::id.eq(user_conversations::user_id)))
+            .select(users::tag)
+            .load::<String>(&mut conn)
+    {
+        Ok(tags) => tags,
+        Err(_) => {
+            return HttpResponse::InternalServerError().body("Failed to fetch user tags");
+        }
+    };
+
+    if user_tags.is_empty() {
+        return HttpResponse::NotFound().body("No participants found for this conversation");
+    }
+
+    // Генерация имени бэкапа на основе user_tags
+    let backup_name = {
+        let mut tags = user_tags.clone();
+        tags.sort(); // Сортируем теги для предсказуемости
+        let joined = tags.join("_");
+        let mut hasher = Sha256::new();
+        hasher.update(joined.as_bytes());
+        format!("{:x}", hasher.finalize()) // Преобразуем в строку hex
+    };
+
+    // Получаем сообщения переписки
+    let messages_data: Vec<(String, String)> = match
+        messages::table
+            .filter(messages::conversation_id.eq(convo_id))
+            .select((messages::content, messages::sent_at))
+            .load::<(String, chrono::NaiveDateTime)>(&mut conn)
+    {
+        Ok(data) =>
+            data
+                .into_iter()
+                .map(|(content, sent_at)| (content, sent_at.to_string()))
+                .collect(),
+        Err(_) => {
+            return HttpResponse::InternalServerError().body("Failed to fetch messages");
+        }
+    };
+
+    // Создаем временный JSON файл с сообщениями
+    let backup_dir = "backups";
+    let backup_path = format!("{}/{}.zip", backup_dir, backup_name);
+    if !Path::new(backup_dir).exists() {
+        fs::create_dir(backup_dir).unwrap();
+    }
+
+    let temp_json_path = format!("{}/{}.json", backup_dir, backup_name);
+    let temp_json_file = File::create(&temp_json_path).unwrap();
+    serde_json::to_writer(&temp_json_file, &messages_data).unwrap();
+
+    // Создаем ZIP архив
+    let zip_file = File::create(&backup_path).unwrap();
+    let mut zip = zip::ZipWriter::new(zip_file);
+    let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+
+    let temp_json_file_path = Path::new(&temp_json_path);
+    zip.start_file(temp_json_file_path.file_name().unwrap().to_string_lossy(), options).unwrap();
+
+    let mut temp_json_content = File::open(&temp_json_path).unwrap();
+    let mut buffer = Vec::new();
+    temp_json_content.read_to_end(&mut buffer).unwrap();
+    zip.write_all(&buffer).unwrap();
+    zip.finish().unwrap();
+
+    // Удаляем временный JSON файл
+    fs::remove_file(temp_json_path).unwrap();
+
+    HttpResponse::Ok().body(format!("Backup created"))
+}
+
+/// Позволяет скачать бэкап
+pub async fn download_backup(path: web::Path<String>) -> HttpResponse {
+    let backup_name = path.into_inner();
+    let backup_path = format!("backups/{}.zip", backup_name);
+
+    if !Path::new(&backup_path).exists() {
+        return HttpResponse::NotFound().body("Backup not found");
+    }
+
+    let backup_file = match fs::read(&backup_path) {
+        Ok(content) => content,
+        Err(_) => {
+            return HttpResponse::InternalServerError().body("Failed to read backup file");
+        }
+    };
+
+    HttpResponse::Ok()
+        .insert_header((
+            "Content-Disposition",
+            format!("attachment; filename=\"{}.zip\"", backup_name),
+        ))
+        .content_type("application/zip")
+        .body(backup_file)
 }

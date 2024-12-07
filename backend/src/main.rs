@@ -14,7 +14,7 @@ async fn main() -> std::io::Result<()> {
     let start_server = chrono::Utc::now().timestamp() as u64;
 
     let pool = db::establish_connection();
-    println!("Server started at https://0.0.0.0:8080");
+    println!("Server started at http://0.0.0.0:8080!");
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(pool.clone()))
@@ -36,6 +36,8 @@ async fn main() -> std::io::Result<()> {
             .route("/convo/{convo_id}", web::post().to(handlers::send_message))
             .route("/convo/{convo_id}", web::get().to(handlers::get_messages))
             .route("/health", web::get().to(handlers::health))
+            .route("/backup/{convo_id}", web::post().to(handlers::backup_convo))
+            .route("/backup/{hash}.zip", web::get().to(handlers::download_backup))
     })
         .bind("0.0.0.0:8080")?
         .run().await

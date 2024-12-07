@@ -12,6 +12,8 @@ RUN cargo build --release
 # Копируем исходный код проекта
 COPY ./src ./src
 
+RUN mkdir backups
+
 # Сборка финального бинарника
 RUN cargo build --release
 
