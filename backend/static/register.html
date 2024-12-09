@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регистрация</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .form-container { width: 300px; margin: 0 auto; padding: 20px; }
+        input { width: 100%; padding: 10px; margin: 10px 0; }
+        button { padding: 10px 20px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <h2>Регистрация</h2>
+        <form id="registerForm">
+            <input type="text" id="tag" placeholder="Тег" required>
+            <input type="text" id="nickname" placeholder="Никнейм" required>
+            <input type="password" id="password" placeholder="Пароль" required>
+            <button type="submit">Зарегистрироваться</button>
+        </form>
+        <p id="errorMessage" style="color: red; display: none;">Ошибка регистрации.</p>
+    </div>
+
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const tag = document.getElementById('tag').value;
+            const nickname = document.getElementById('nickname').value;
+            const password = document.getElementById('password').value;
+
+            const response = await fetch('http://0.0.0.0:8080/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ tag, nickname, password }),
+            });
+
+            if (response.ok) {
+                window.location.href = '/login'; // Перенаправляем на страницу входа
+            } else {
+                document.getElementById('errorMessage').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

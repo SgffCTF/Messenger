@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель управления</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: row;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+        }
+        #users, #conversations {
+            border: 1px solid #ccc;
+            padding: 10px;
+            overflow-y: auto;
+        }
+        #users {
+            width: 25%;
+        }
+        #conversations {
+            width: 50%;
+        }
+        .user-item, .convo-item {
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+        .user-item:hover, .convo-item:hover {
+            background-color: #f0f0f0;
+        }
+        #message-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+        }
+        #messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+        #send-message {
+            display: flex;
+            gap: 10px;
+            padding: 10px;
+            border-top: 1px solid #ccc;
+        }
+        #send-message input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+        #send-message button {
+            padding: 10px;
+        }
+        .message {
+            margin-bottom: 10px;
+            display: flex;
+        }
+        .message-right {
+            justify-content: flex-end;
+        }
+        .message-left {
+            justify-content: flex-start;
+        }
+        .message-content {
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #f1f1f1;
+            max-width: 70%;
+        }
+        .message-left .message-content {
+            background-color: #e0e0e0;
+        }
+        .message-right .message-content {
+            background-color: #c0f0c0;
+        }
+        #conversation-header {
+            text-align: center;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="users">
+        <h2>Пользователи</h2>
+    </div>
+
+    <div id="conversations">
+        <h2>Переписки</h2>
+    </div>
+
+    <div id="message-container" style="display:none;">
+        <div id="conversation-header"></div>
+        <div id="messages"></div>
+        <div id="send-message">
+            <input type="text" id="messageInput" placeholder="Введите сообщение...">
+            <button id="sendMessageBtn">Отправить</button>
+        </div>
+    </div>
+
+    <script>
+        async function fetchData(url, method = 'GET', body = null) {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+
+            const options = { method, headers, credentials: 'include' }; // Включаем сессионные куки
+            if (body) options.body = JSON.stringify(body);
+
+            try {
+                const response = await fetch(url, options);
+
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    console.error('Error:', response.status, response.statusText);
+                    return null;
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+                return null;
+            }
+        }
+
+        async function loadUsers() {
+            const users = await fetchData('http://0.0.0.0:8080/users');
+            const usersDiv = document.getElementById('users');
+
+            if (users) {
+                usersDiv.innerHTML = '<h2>Пользователи</h2>';
+                users.forEach(user => {
+                    const userElement = document.createElement('div');
+                    userElement.classList.add('user-item');
+                    userElement.textContent = `${user.nickname} (${user.tag})`;
+                    userElement.dataset.tag = user.tag;
+                    usersDiv.appendChild(userElement);
+
+                    userElement.addEventListener('click', () => {
+                        startConversation(user.tag);
+                    });
+                });
+            }
+        }
+
+        async function startConversation(tag) {
+            const result = await fetchData(`http://0.0.0.0:8080/start_convo`, 'POST', { recipient_tag: tag });
+
+            if (result) {
+                loadConversations();  // Перезагружаем список переписок после начала новой
+                viewConversation(result.convo_id, tag); // Открываем переписку сразу после ее создания
+            }
+        }
+
+        async function loadConversations() {
+            const conversations = await fetchData('http://0.0.0.0:8080/convos');
+            const convoDiv = document.getElementById('conversations');
+            convoDiv.innerHTML = '<h2>Переписки</h2>';
+
+            if (conversations) {
+                conversations.forEach(convo => {
+                    const convoElement = document.createElement('div');
+                    convoElement.classList.add('convo-item');
+                    convoElement.innerHTML = `<p>${convo.participant_nickname} (${convo.participant_tag})<br>Последнее сообщение: ${convo.last_message || 'Нет сообщений'}</p>`;
+                    convoDiv.appendChild(convoElement);
+
+                    convoElement.addEventListener('click', () => {
+                        viewConversation(convo.id, convo.participant_tag);
+                    });
+                });
+            }
+        }
+
+        async function viewConversation(convoId, participantTag) {
+            const conversationHeader = document.getElementById('conversation-header');
+            const messagesDiv = document.getElementById('messages');
+            const messageContainer = document.getElementById('message-container');
+            const sendMessageBtn = document.getElementById('sendMessageBtn');
+
+            document.getElementById('conversations').style.display = 'none';
+            messageContainer.style.display = 'flex';
+            conversationHeader.textContent = `Переписка с ${participantTag}`;
+
+            messagesDiv.innerHTML = '<p>Загрузка сообщений...</p>';
+
+            const messages = await fetchData(`http://0.0.0.0:8080/convo/${convoId}`);
+
+            if (messages) {
+                messagesDiv.innerHTML = '';
+                messages.forEach(message => {
+                    const messageElement = document.createElement('div');
+                    messageElement.classList.add('message');
+                    const isCurrentUserMessage = message.sender_tag === participantTag;
+
+                    messageElement.classList.add(isCurrentUserMessage ? 'message-right' : 'message-left');
+                    messageElement.innerHTML = `
+                        <div class="message-content">${message.content}</div>
+                    `;
+
+                    messagesDiv.appendChild(messageElement);
+                });
+                messagesDiv.scrollTop = messagesDiv.scrollHeight; // Прокручиваем вниз, чтобы увидеть последние сообщения
+            } else {
+                messagesDiv.innerHTML = '<p>Не удалось загрузить сообщения.</p>';
+            }
+
+            sendMessageBtn.onclick = () => sendMessage(convoId, participantTag);
+        }
+
+        async function sendMessage(convoId, participantTag) {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+
+            if (!message) {
+                alert('Введите сообщение.');
+                return;
+            }
+
+            const result = await fetchData(`http://0.0.0.0:8080/convo/${convoId}`, 'POST', { content: message });
+
+            if (result) {
+                viewConversation(convoId, participantTag); // Обновляем переписку сразу после отправки
+            } else {
+                alert('Не удалось отправить сообщение.');
+            }
+
+            messageInput.value = '';
+        }
+
+        loadUsers();
+        loadConversations();
+    </script>
+</body>
+</html>

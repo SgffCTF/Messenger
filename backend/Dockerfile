@@ -9,6 +9,7 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs
 # Скачиваем зависимости. Это кешируется, если Cargo.toml не меняется.
 RUN cargo build --release
 
+COPY ./static ./static
 # Копируем исходный код проекта
 COPY ./src ./src
 

@@ -32,6 +32,7 @@ pub async fn register_user(
     pool: web::Data<DbPool>,
     user_data: web::Json<RegisterData>
 ) -> HttpResponse {
+    eprintln!("REGISTER");
     let mut conn = pool.get().unwrap();
 
     // Хешируем пароль
@@ -76,6 +77,7 @@ pub async fn login_user(
     session: Session
 ) -> HttpResponse {
     let mut conn = pool.get().unwrap();
+    eprintln!("LOGIN");
 
     // Ищем пользователя по тегу
     match users::table.filter(users::tag.eq(&user_data.tag)).first::<User>(&mut conn) {
@@ -129,6 +131,7 @@ pub async fn health(data: web::Data<u64>) -> HttpResponse {
 }
 
 pub async fn get_users(pool: web::Data<DbPool>, session: Session) -> HttpResponse {
+    eprintln!("GET_USERS");
     // Проверяем, есть ли пользователь в сессии
     let user_tag: Option<String> = match session.get("user_tag") {
         Ok(user_tag) => user_tag, // Успешно получили тег
@@ -173,6 +176,7 @@ pub async fn start_convo(
     session: Session,
     data: web::Json<StartConvoData>
 ) -> HttpResponse {
+    eprintln!("START_CONVO");
     // Получаем ID текущего пользователя из сессии
     let user_tag: Option<String> = match session.get("user_tag") {
         Ok(user_tag) => user_tag,
@@ -262,6 +266,7 @@ pub async fn start_convo(
 }
 
 pub async fn get_convos(pool: web::Data<DbPool>, session: Session) -> HttpResponse {
+    eprintln!("GET_CONVOS");
     let user_tag: Option<String> = match session.get("user_tag") {
         Ok(user_tag) => user_tag,
         Err(_) => {
@@ -330,6 +335,7 @@ pub async fn send_message(
     path: web::Path<i32>,
     data: web::Json<MessageData>
 ) -> HttpResponse {
+    eprintln!("SEND_MESSAGE");
     let user_tag: Option<String> = match session.get("user_tag") {
         Ok(user_tag) => user_tag,
         Err(_) => {
@@ -378,6 +384,7 @@ pub async fn get_messages(
     session: Session,
     path: web::Path<i32>
 ) -> HttpResponse {
+    eprintln!("GET_MESSAGES");
     let user_tag: Option<String> = match session.get("user_tag") {
         Ok(user_tag) => user_tag,
         Err(_) => {
@@ -420,6 +427,7 @@ pub async fn get_messages(
 }
 
 pub async fn backup_convo(pool: web::Data<DbPool>, path: web::Path<i32>) -> HttpResponse {
+    eprintln!("BACKUP_CONVO");
     let convo_id = path.into_inner();
     let mut conn = pool.get().unwrap();
 
@@ -501,6 +509,7 @@ pub async fn backup_convo(pool: web::Data<DbPool>, path: web::Path<i32>) -> Http
 
 /// Позволяет скачать бэкап
 pub async fn download_backup(path: web::Path<String>) -> HttpResponse {
+    eprintln!("DOWNLOAD_BACKUP");
     let backup_name = path.into_inner();
     let backup_path = format!("backups/{}.zip", backup_name);
 
