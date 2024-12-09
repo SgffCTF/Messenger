@@ -107,6 +107,15 @@
     </div>
 
     <script>
+        let currentUserTag = 'your_current_user_tag'; // Здесь нужно получить текущего пользователя из сервера
+
+        async function loadCurrentUser() {
+            const user = await fetchData('http://0.0.0.0:8080/current_user');
+            if (user) {
+                currentUserTag = user.tag;
+            }
+        }
+
         async function fetchData(url, method = 'GET', body = null) {
             const headers = {
                 'Content-Type': 'application/json'
@@ -153,9 +162,10 @@
         async function startConversation(tag) {
             const result = await fetchData(`http://0.0.0.0:8080/start_convo`, 'POST', { recipient_tag: tag });
 
-            if (result) {
-                loadConversations();  // Перезагружаем список переписок после начала новой
-                viewConversation(result.convo_id, tag); // Открываем переписку сразу после ее создания
+            if (result && result.convo_id) {
+                viewConversation(result.convo_id, tag); // Открываем переписку, если она уже есть
+            } else {
+                console.error('Не удалось создать или найти переписку.');
             }
         }
 
@@ -188,6 +198,13 @@
             messageContainer.style.display = 'flex';
             conversationHeader.textContent = `Переписка с ${participantTag}`;
 
+            await loadMessages(convoId); // Загрузка сообщений
+
+            sendMessageBtn.onclick = () => sendMessage(convoId, participantTag);
+        }
+
+        async function loadMessages(convoId) {
+            const messagesDiv = document.getElementById('messages');
             messagesDiv.innerHTML = '<p>Загрузка сообщений...</p>';
 
             const messages = await fetchData(`http://0.0.0.0:8080/convo/${convoId}`);
@@ -197,7 +214,7 @@
                 messages.forEach(message => {
                     const messageElement = document.createElement('div');
                     messageElement.classList.add('message');
-                    const isCurrentUserMessage = message.sender_tag === participantTag;
+                    const isCurrentUserMessage = message.sender_tag === currentUserTag; // Определяем, кто отправил сообщение
 
                     messageElement.classList.add(isCurrentUserMessage ? 'message-right' : 'message-left');
                     messageElement.innerHTML = `
@@ -210,8 +227,6 @@
             } else {
                 messagesDiv.innerHTML = '<p>Не удалось загрузить сообщения.</p>';
             }
-
-            sendMessageBtn.onclick = () => sendMessage(convoId, participantTag);
         }
 
         async function sendMessage(convoId, participantTag) {
@@ -226,7 +241,7 @@
             const result = await fetchData(`http://0.0.0.0:8080/convo/${convoId}`, 'POST', { content: message });
 
             if (result) {
-                viewConversation(convoId, participantTag); // Обновляем переписку сразу после отправки
+                await loadMessages(convoId); // Перезагружаем сообщения после отправки
             } else {
                 alert('Не удалось отправить сообщение.');
             }
@@ -234,8 +249,13 @@
             messageInput.value = '';
         }
 
-        loadUsers();
-        loadConversations();
+        async function init() {
+            await loadCurrentUser(); // Получаем текущего пользователя
+            loadUsers();
+            loadConversations();
+        }
+
+        init();
     </script>
 </body>
 </html>

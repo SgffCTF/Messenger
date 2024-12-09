@@ -186,6 +186,9 @@ pub async fn start_convo(
     };
 
     if let Some(current_user_tag) = user_tag {
+        if current_user_tag == data.recipient_tag {
+            return HttpResponse::BadRequest().body("Cannot start a conversation with yourself");
+        }
         let current_user_id = match get_user_id_by_tag(&pool, &current_user_tag).await {
             Ok(id) => id,
             Err(_) => {
@@ -210,8 +213,13 @@ pub async fn start_convo(
                 // Проверяем, есть ли уже разговор между пользователями
                 let existing_convo = user_conversations::table
                     .inner_join(conversations::table)
-                    .filter(user_conversations::user_id.eq(current_user_id))
-                    .filter(user_conversations::user_id.eq(recipient_id))
+                    .filter(
+                        user_conversations::user_id
+                            .eq(current_user_id)
+                            .or(user_conversations::user_id.eq(recipient_id))
+                    )
+                    .group_by(user_conversations::conversation_id)
+                    .having(diesel::dsl::count(user_conversations::user_id).eq(2))
                     .select(user_conversations::conversation_id)
                     .first::<i32>(&mut conn)
                     .optional();
@@ -531,4 +539,19 @@ pub async fn download_backup(path: web::Path<String>) -> HttpResponse {
         ))
         .content_type("application/zip")
         .body(backup_file)
+}
+
+pub async fn current_user_id(pool: web::Data<DbPool>, session: Session) -> HttpResponse {
+    eprintln!("CURRENT_USER_ID");
+    let user_tag: Option<String> = match session.get("user_tag") {
+        Ok(user_tag) => user_tag,
+        Err(_) => {
+            return HttpResponse::InternalServerError().body("Failed to read session");
+        }
+    };
+
+    match user_tag {
+        Some(_tag) => HttpResponse::Ok().json(get_user_id_by_tag(&pool, &_tag).await.unwrap()),
+        None => HttpResponse::Unauthorized().body("Unauthorized"),
+    }
 }
