@@ -107,14 +107,7 @@
     </div>
 
     <script>
-        let currentUserTag = 'your_current_user_tag'; // Здесь нужно получить текущего пользователя из сервера
-
-        async function loadCurrentUser() {
-            const user = await fetchData('http://0.0.0.0:8080/current_user');
-            if (user) {
-                currentUserTag = user.tag;
-            }
-        }
+        let currentUserId = null; // Здесь будет храниться текущий user_id
 
         async function fetchData(url, method = 'GET', body = null) {
             const headers = {
@@ -127,20 +120,29 @@
             try {
                 const response = await fetch(url, options);
 
-                if (response.ok) {
+                if (response) {
                     return response.json();
                 } else {
-                    console.error('Error:', response.status, response.statusText);
-                    return null;
-                }
+                   console.error('Error:', response.status, response.statusText);
+                  return null;
+               }
             } catch (error) {
                 console.error('Fetch error:', error);
                 return null;
             }
         }
 
+        async function loadCurrentUser() {
+            const userId = await fetchData('/current_user');
+            if (userId) {
+                currentUserId = userId; // Сохраняем ID текущего пользователя
+            } else {
+                console.error('Не удалось получить ID текущего пользователя');
+            }
+        }
+
         async function loadUsers() {
-            const users = await fetchData('http://0.0.0.0:8080/users');
+            const users = await fetchData('/users');
             const usersDiv = document.getElementById('users');
 
             if (users) {
@@ -160,17 +162,17 @@
         }
 
         async function startConversation(tag) {
-            const result = await fetchData(`http://0.0.0.0:8080/start_convo`, 'POST', { recipient_tag: tag });
+            const result = await fetchData(`/start_convo`, 'POST', { recipient_tag: tag });
 
             if (result && result.convo_id) {
-                viewConversation(result.convo_id, tag); // Открываем переписку, если она уже есть
+                await viewConversation(result.convo_id, tag); // Открываем переписку, если она уже есть
             } else {
                 console.error('Не удалось создать или найти переписку.');
             }
         }
 
         async function loadConversations() {
-            const conversations = await fetchData('http://0.0.0.0:8080/convos');
+            const conversations = await fetchData('/convos');
             const convoDiv = document.getElementById('conversations');
             convoDiv.innerHTML = '<h2>Переписки</h2>';
 
@@ -207,14 +209,14 @@
             const messagesDiv = document.getElementById('messages');
             messagesDiv.innerHTML = '<p>Загрузка сообщений...</p>';
 
-            const messages = await fetchData(`http://0.0.0.0:8080/convo/${convoId}`);
+            const messages = await fetchData(`/convo/${convoId}`);
 
             if (messages) {
                 messagesDiv.innerHTML = '';
                 messages.forEach(message => {
                     const messageElement = document.createElement('div');
                     messageElement.classList.add('message');
-                    const isCurrentUserMessage = message.sender_tag === currentUserTag; // Определяем, кто отправил сообщение
+                    const isCurrentUserMessage = message.sender_id === currentUserId; // Проверяем sender_id
 
                     messageElement.classList.add(isCurrentUserMessage ? 'message-right' : 'message-left');
                     messageElement.innerHTML = `
@@ -238,12 +240,10 @@
                 return;
             }
 
-            const result = await fetchData(`http://0.0.0.0:8080/convo/${convoId}`, 'POST', { content: message });
+            const result = await fetchData(`/convo/${convoId}`, 'POST', { content: message });
 
             if (result) {
-                await loadMessages(convoId); // Перезагружаем сообщения после отправки
-            } else {
-                alert('Не удалось отправить сообщение.');
+                await loadMessages(convoId); // Обновляем сообщения после отправки
             }
 
             messageInput.value = '';

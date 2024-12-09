@@ -28,7 +28,7 @@ async fn main() -> std::io::Result<()> {
     let start_server = chrono::Utc::now().timestamp() as u64;
 
     let pool = db::establish_connection();
-    println!("Server started at http://0.0.0.0:8080");
+    println!("Server started at http://0.0.0.0:8080!");
     HttpServer::new(move || {
         let cors = Cors::permissive();
 
