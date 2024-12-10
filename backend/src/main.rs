@@ -22,6 +22,10 @@ pub async fn dashboard() -> impl Responder {
     fs::NamedFile::open("./static/dashboard.html").unwrap()
 }
 
+pub async fn convo_form() -> impl Responder {
+    fs::NamedFile::open("./static/conversation.html").unwrap()
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
@@ -49,13 +53,14 @@ async fn main() -> std::io::Result<()> {
             .route("/register", web::post().to(handlers::register_user))
             .route("/register", web::get().to(register_form))
             .route("/login", web::post().to(handlers::login_user))
-            .route("login", web::get().to(login_form))
+            .route("/login", web::get().to(login_form))
             .route("/users", web::get().to(handlers::get_users))
             .route("/current_user", web::get().to(handlers::current_user_id))
             .route("/start_convo", web::post().to(handlers::start_convo))
             .route("/convos", web::get().to(handlers::get_convos))
             .route("/convo/{convo_id}", web::post().to(handlers::send_message))
             .route("/convo/{convo_id}", web::get().to(handlers::get_messages))
+            .route("/convo/{convo_id}/see", web::get().to(convo_form))
             .route("/health", web::get().to(handlers::health))
             .route("/backup/{convo_id}", web::post().to(handlers::backup_convo))
             .route("/backup/{hash}.zip", web::get().to(handlers::download_backup))

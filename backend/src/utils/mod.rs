@@ -15,3 +15,12 @@ pub fn generate_session_key(start_time: u64) -> Key {
     }
     Key::from(&key_bytes)
 }
+
+pub async fn get_nickname_by_id(
+    pool: &DbPool,
+    user_id: i32
+) -> Result<String, diesel::result::Error> {
+    use crate::schema::users::dsl::*;
+    let mut conn = pool.get().unwrap();
+    users.filter(id.eq(user_id)).select(nickname).first::<String>(&mut conn)
+}

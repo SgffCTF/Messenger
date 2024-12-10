@@ -8,6 +8,7 @@ use std::fs::{ self, File };
 use std::io::{ Read, Write };
 use std::path::Path;
 use zip::write::FileOptions;
+use serde_json::json;
 use crate::{ db::DbPool, models::User };
 use crate::schema::users::{ self, tag, nickname, last_seen };
 use crate::schema::user_conversations;
@@ -25,7 +26,7 @@ use crate::models::{
     Message,
     ConversationInfo,
 };
-use crate::utils::get_user_id_by_tag;
+use crate::utils::{ get_user_id_by_tag, get_nickname_by_id };
 use chrono::Utc;
 
 pub async fn register_user(
@@ -422,13 +423,39 @@ pub async fn get_messages(
             return HttpResponse::Forbidden().body("You don't have access to this conversation");
         }
 
-        // Получаем сообщения
-        let messages = messages::table
-            .filter(messages::conversation_id.eq(convo_id))
-            .load::<Message>(&mut conn)
+        let other_participant_id = user_conversations::table
+            .filter(user_conversations::conversation_id.eq(convo_id))
+            .filter(user_conversations::user_id.ne(current_user_id))
+            .select(user_conversations::user_id)
+            .first::<i32>(&mut conn)
+            .optional()
             .unwrap();
 
-        HttpResponse::Ok().json(messages)
+        if let Some(other_id) = other_participant_id {
+            // Получаем ник другого участника
+            let participant_nickname = match get_nickname_by_id(&pool, other_id).await {
+                Ok(nick) => nick,
+                Err(_) => {
+                    return HttpResponse::InternalServerError().body(
+                        "Failed to get participant nickname"
+                    );
+                }
+            };
+            // Получаем сообщения
+            let messages = messages::table
+                .filter(messages::conversation_id.eq(convo_id))
+                .load::<Message>(&mut conn)
+                .unwrap();
+
+            HttpResponse::Ok().json(
+                json!({
+                        "messages": messages,
+                        "participant_nickname": participant_nickname
+                    })
+            )
+        } else {
+            HttpResponse::NotFound().body("Cannot find other participant in this conversation")
+        }
     } else {
         HttpResponse::Unauthorized().body("Unauthorized")
     }

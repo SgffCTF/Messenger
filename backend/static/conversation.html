@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Переписка</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            font-size: 18px;
+        }
+        #message-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        #conversation-header {
+            background-color: #2c2c2c;
+            padding: 20px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 24px;
+        }
+        #messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            border: 1px solid #444;
+            padding: 20px;
+        }
+        #send-message {
+            display: flex;
+            padding: 20px;
+        }
+        #messageInput {
+            flex-grow: 1;
+            margin-right: 20px;
+            padding: 10px;
+            font-size: 18px;
+            background-color: #2c2c2c;
+            color: #ffffff;
+            border: 1px solid #444;
+        }
+        #sendMessageBtn {
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .message {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 18px;
+        }
+        .message-right {
+            background-color: #2c5282;
+            text-align: right;
+        }
+        .message-left {
+            background-color: #3c3c3c;
+        }
+        .message-time {
+            font-size: 14px;
+            color: #888;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="message-container">
+        <div id="conversation-header"></div>
+        <div id="messages"></div>
+        <div id="send-message">
+            <input type="text" id="messageInput" placeholder="Введите сообщение...">
+            <button id="sendMessageBtn">Отправить</button>
+        </div>
+    </div>
+
+    <script>
+        let currentUserId = null;
+        let currentConvoId = null;
+
+        async function loadCurrentUser() {
+            try {
+                const response = await fetch('/current_user', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                const userId = await response.json();
+                if (userId) {
+                    currentUserId = userId;
+                } else {
+                    console.error('Не удалось получить ID текущего пользователя');
+                }
+            } catch (error) {
+                console.error('Ошибка при загрузке текущего пользователя:', error);
+            }
+        }
+
+        async function loadConversationInfo() {
+            try {
+                const response = await fetch(`/convo/${currentConvoId}`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                const convoInfo = await response.json();
+                const headerDiv = document.getElementById('conversation-header');
+                headerDiv.textContent = `Переписка с ${convoInfo.participant_nickname}`;
+            } catch (error) {
+                console.error('Ошибка при загрузке информации о переписке:', error);
+            }
+        }
+        async function loadMessages() {
+            try {
+                const response = await fetch(`/convo/${currentConvoId}`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                const messages = data.messages;
+                const participantNickname = data.participant_nickname;
+                const messagesDiv = document.getElementById('messages');
+                messagesDiv.innerHTML = '';
+
+                // Обновляем заголовок с ником собеседника
+                const headerDiv = document.getElementById('conversation-header');
+                headerDiv.textContent = `Переписка с ${participantNickname}`;
+                messages.forEach(message => {
+                    const messageElement = document.createElement('div');
+                    messageElement.classList.add('message');
+                    const isCurrentUserMessage = message.sender_id === currentUserId;
+
+                    messageElement.classList.add(isCurrentUserMessage ? 'message-right' : 'message-left');
+                    const messageTime = new Date(message.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    messageElement.innerHTML = `
+                        <div class="message-content">${message.content}</div>
+                        <div class="message-time">${messageTime}</div>
+                    `;
+
+                    messagesDiv.appendChild(messageElement);
+                });
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            } catch (error) {
+                console.error('Ошибка при загрузке сообщений:', error);
+            }
+        }
+
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+
+            if (!message) {
+                alert('Введите сообщение.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/convo/${currentConvoId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content: message }),
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    await loadMessages();
+                    messageInput.value = '';
+                } else {
+                    console.error('Ошибка при отправке сообщения');
+                }
+            } catch (error) {
+                console.error('Ошибка при отправке сообщения:', error);
+            }
+        }
+        function startMessagePolling() {
+            setInterval(loadMessages, 10000);
+        }
+        function init() {
+            const pathParts = window.location.pathname.split('/');
+            currentConvoId = pathParts[2];
+
+            loadCurrentUser().then(() => {
+                loadConversationInfo();
+                loadMessages();
+                startMessagePolling(); // Добавьте эту строку
+            });
+
+            document.getElementById('sendMessageBtn').addEventListener('click', sendMessage);
+            document.getElementById('messageInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>

@@ -6,177 +6,146 @@
     <title>Панель управления</title>
     <style>
         body {
-            display: flex;
-            flex-direction: row;
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
             height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            font-size: 18px;
+        }
+        #header {
+            background-color: #2c2c2c;
+            padding: 20px;
+            text-align: right;
+        }
+        #content {
+            display: flex;
+            flex-grow: 1;
         }
         #users, #conversations {
-            border: 1px solid #ccc;
-            padding: 10px;
+            border: 1px solid #444;
+            padding: 20px;
             overflow-y: auto;
-        }
-        #users {
-            width: 25%;
-        }
-        #conversations {
             width: 50%;
         }
         .user-item, .convo-item {
-            margin-bottom: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
             cursor: pointer;
+            background-color: #3c3c3c;
+            border-radius: 10px;
         }
         .user-item:hover, .convo-item:hover {
-            background-color: #f0f0f0;
+            background-color: #4c4c4c;
         }
-        #message-container {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            width: 100%;
-        }
-        #messages {
-            flex-grow: 1;
-            overflow-y: auto;
-            border: 1px solid #ccc;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-        }
-        #send-message {
-            display: flex;
-            gap: 10px;
-            padding: 10px;
-            border-top: 1px solid #ccc;
-        }
-        #send-message input {
-            flex-grow: 1;
-            padding: 10px;
-            border: 1px solid #ccc;
-        }
-        #send-message button {
-            padding: 10px;
-        }
-        .message {
-            margin-bottom: 10px;
-            display: flex;
-        }
-        .message-right {
-            justify-content: flex-end;
-        }
-        .message-left {
-            justify-content: flex-start;
-        }
-        .message-content {
-            padding: 10px;
-            border-radius: 5px;
-            background-color: #f1f1f1;
-            max-width: 70%;
-        }
-        .message-left .message-content {
-            background-color: #e0e0e0;
-        }
-        .message-right .message-content {
-            background-color: #c0f0c0;
-        }
-        #conversation-header {
-            text-align: center;
-            font-size: 1.2em;
-            margin-bottom: 10px;
+        h2 {
+            font-size: 24px;
+            margin-bottom: 20px;
         }
     </style>
 </head>
 <body>
-    <div id="users">
-        <h2>Пользователи</h2>
+    <div id="header">
+        <span id="current-user"></span>
     </div>
-
-    <div id="conversations">
-        <h2>Переписки</h2>
-    </div>
-
-    <div id="message-container" style="display:none;">
-        <div id="conversation-header"></div>
-        <div id="messages"></div>
-        <div id="send-message">
-            <input type="text" id="messageInput" placeholder="Введите сообщение...">
-            <button id="sendMessageBtn">Отправить</button>
+    <div id="content">
+        <div id="users">
+            <h2>Пользователи</h2>
+        </div>
+        <div id="conversations">
+            <h2>Переписки</h2>
         </div>
     </div>
 
     <script>
-        let currentUserId = null; // Здесь будет храниться текущий user_id
-
-        async function fetchData(url, method = 'GET', body = null) {
-            const headers = {
-                'Content-Type': 'application/json'
-            };
-
-            const options = { method, headers, credentials: 'include' }; // Включаем сессионные куки
-            if (body) options.body = JSON.stringify(body);
-
-            try {
-                const response = await fetch(url, options);
-
-                if (response) {
-                    return response.json();
-                } else {
-                   console.error('Error:', response.status, response.statusText);
-                  return null;
-               }
-            } catch (error) {
-                console.error('Fetch error:', error);
-                return null;
-            }
-        }
+        let currentUserId = null;
 
         async function loadCurrentUser() {
-            const userId = await fetchData('/current_user');
-            if (userId) {
-                currentUserId = userId; // Сохраняем ID текущего пользователя
-            } else {
-                console.error('Не удалось получить ID текущего пользователя');
+            try {
+                const response = await fetch('/current_user', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                const userId = await response.json();
+                if (userId) {
+                    currentUserId = userId;
+                    const userResponse = await fetch(`/users/${userId}`, {
+                        method: 'GET',
+                        credentials: 'include'
+                    });
+                    const userData = await userResponse.json();
+                    document.getElementById('current-user').textContent = `Текущий пользователь: ${userData.nickname}`;
+                } else {
+                    console.error('Не удалось получить ID текущего пользователя');
+                }
+            } catch (error) {
+                console.error('Ошибка при загрузке текущего пользователя:', error);
             }
         }
 
         async function loadUsers() {
-            const users = await fetchData('/users');
-            const usersDiv = document.getElementById('users');
+            try {
+                const response = await fetch('/users', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                const users = await response.json();
+                const usersDiv = document.getElementById('users');
 
-            if (users) {
                 usersDiv.innerHTML = '<h2>Пользователи</h2>';
                 users.forEach(user => {
-                    const userElement = document.createElement('div');
-                    userElement.classList.add('user-item');
-                    userElement.textContent = `${user.nickname} (${user.tag})`;
-                    userElement.dataset.tag = user.tag;
-                    usersDiv.appendChild(userElement);
+                    if (user.id !== currentUserId) {
+                        const userElement = document.createElement('div');
+                        userElement.classList.add('user-item');
+                        userElement.textContent = `${user.nickname} (${user.tag})`;
+                        userElement.dataset.tag = user.tag;
+                        usersDiv.appendChild(userElement);
 
-                    userElement.addEventListener('click', () => {
-                        startConversation(user.tag);
-                    });
+                        userElement.addEventListener('click', () => {
+                            startConversation(user.tag);
+                        });
+                    }
                 });
+            } catch (error) {
+                console.error('Ошибка при загрузке пользователей:', error);
             }
         }
 
         async function startConversation(tag) {
-            const result = await fetchData(`/start_convo`, 'POST', { recipient_tag: tag });
+            try {
+                const response = await fetch('/start_convo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ recipient_tag: tag }),
+                    credentials: 'include'
+                });
+                const result = await response.json();
 
-            if (result && result.convo_id) {
-                await viewConversation(result.convo_id, tag); // Открываем переписку, если она уже есть
-            } else {
-                console.error('Не удалось создать или найти переписку.');
+                if (result && result.conversation_id) {
+                    window.location.href = `/convo/${result.conversation_id}/see`;
+                } else {
+                    console.error('Не удалось создать или найти переписку.');
+                }
+            } catch (error) {
+                console.error('Ошибка при создании переписки:', error);
             }
         }
 
         async function loadConversations() {
-            const conversations = await fetchData('/convos');
-            const convoDiv = document.getElementById('conversations');
-            convoDiv.innerHTML = '<h2>Переписки</h2>';
+            try {
+                const response = await fetch('/convos', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                const conversations = await response.json();
+                const convoDiv = document.getElementById('conversations');
+                convoDiv.innerHTML = '<h2>Переписки</h2>';
 
-            if (conversations) {
                 conversations.forEach(convo => {
                     const convoElement = document.createElement('div');
                     convoElement.classList.add('convo-item');
@@ -184,78 +153,22 @@
                     convoDiv.appendChild(convoElement);
 
                     convoElement.addEventListener('click', () => {
-                        viewConversation(convo.id, convo.participant_tag);
+                        window.location.href = `/convo/${convo.id}/see`;
                     });
                 });
+            } catch (error) {
+                console.error('Ошибка при загрузке переписок:', error);
             }
         }
 
-        async function viewConversation(convoId, participantTag) {
-            const conversationHeader = document.getElementById('conversation-header');
-            const messagesDiv = document.getElementById('messages');
-            const messageContainer = document.getElementById('message-container');
-            const sendMessageBtn = document.getElementById('sendMessageBtn');
+        function init() {
+            loadCurrentUser().then(() => {
+                loadUsers();
+                loadConversations();
+        })
+    }
 
-            document.getElementById('conversations').style.display = 'none';
-            messageContainer.style.display = 'flex';
-            conversationHeader.textContent = `Переписка с ${participantTag}`;
-
-            await loadMessages(convoId); // Загрузка сообщений
-
-            sendMessageBtn.onclick = () => sendMessage(convoId, participantTag);
-        }
-
-        async function loadMessages(convoId) {
-            const messagesDiv = document.getElementById('messages');
-            messagesDiv.innerHTML = '<p>Загрузка сообщений...</p>';
-
-            const messages = await fetchData(`/convo/${convoId}`);
-
-            if (messages) {
-                messagesDiv.innerHTML = '';
-                messages.forEach(message => {
-                    const messageElement = document.createElement('div');
-                    messageElement.classList.add('message');
-                    const isCurrentUserMessage = message.sender_id === currentUserId; // Проверяем sender_id
-
-                    messageElement.classList.add(isCurrentUserMessage ? 'message-right' : 'message-left');
-                    messageElement.innerHTML = `
-                        <div class="message-content">${message.content}</div>
-                    `;
-
-                    messagesDiv.appendChild(messageElement);
-                });
-                messagesDiv.scrollTop = messagesDiv.scrollHeight; // Прокручиваем вниз, чтобы увидеть последние сообщения
-            } else {
-                messagesDiv.innerHTML = '<p>Не удалось загрузить сообщения.</p>';
-            }
-        }
-
-        async function sendMessage(convoId, participantTag) {
-            const messageInput = document.getElementById('messageInput');
-            const message = messageInput.value.trim();
-
-            if (!message) {
-                alert('Введите сообщение.');
-                return;
-            }
-
-            const result = await fetchData(`/convo/${convoId}`, 'POST', { content: message });
-
-            if (result) {
-                await loadMessages(convoId); // Обновляем сообщения после отправки
-            }
-
-            messageInput.value = '';
-        }
-
-        async function init() {
-            await loadCurrentUser(); // Получаем текущего пользователя
-            loadUsers();
-            loadConversations();
-        }
-
-        init();
+    init();
     </script>
 </body>
 </html>
