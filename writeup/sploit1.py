@@ -5,7 +5,7 @@ from checklib import *
 
 URL = 'http://0.0.0.0:8080'
 
-with open('writeup/attack_data.json', 'r') as f:
+with open('/home/kali/Desktop/VSCode_files/STUDY/kursach/writeup/attack_data.json', 'r') as f:
     attack_data = json.load(f)
 
 nick = rnd_username()
@@ -54,7 +54,7 @@ if data == 'Backup created':
     # Скачиваем архив
     r = requests.get(f'{URL}/backup/{backup_name}', stream=True)  # Указываем stream=True для больших файлов
     if r.status_code == 200:
-        with open(f'writeup/{backup_name}', 'wb') as f:
+        with open(f'/home/kali/Desktop/VSCode_files/STUDY/kursach/writeup/{backup_name}', 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):  # Читаем и записываем файл порциями
                 f.write(chunk)
         print(f"Backup {backup_name} downloaded successfully.")
