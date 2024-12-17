@@ -60,7 +60,7 @@ async fn run_server(start_time: u64, tags: Vec<String>) -> std::io::Result<()> {
             .wrap(session)
             .service(web::resource("/").route(web::get().to(steal_session)))
     })
-        .bind("127.0.0.1:1337")?
+        .bind("127.0.0.1:228")?
         .run().await
 }
 

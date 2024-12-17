@@ -36,7 +36,6 @@ pub async fn register_user(
     eprintln!("REGISTER");
     let mut conn = pool.get().unwrap();
 
-    // Хешируем пароль
     let hashed_password = match hash(&user_data.password, DEFAULT_COST) {
         Ok(hash) => hash,
         Err(_) => {
@@ -44,7 +43,6 @@ pub async fn register_user(
         }
     };
 
-    // Создаем нового пользователя
     let new_user = NewUser {
         tag: user_data.tag.clone(),
         nickname: user_data.nickname.clone(),
@@ -52,13 +50,8 @@ pub async fn register_user(
         last_seen: None,
     };
 
-    // Вставляем пользователя в базу данных
-    match
-        diesel::insert_into(users::table).values(&new_user).execute(&mut conn) // Передаем изменяемую ссылку
-    {
-        // Если успешно, возвращаем статус 201 (Created)
+    match diesel::insert_into(users::table).values(&new_user).execute(&mut conn) {
         Ok(_) => HttpResponse::Created().body("User created successfully"),
-        // Если тег уже существует
         Err(
             diesel::result::Error::DatabaseError(
                 diesel::result::DatabaseErrorKind::UniqueViolation,
@@ -67,7 +60,6 @@ pub async fn register_user(
         ) => {
             HttpResponse::Conflict().body("Tag already exists")
         }
-        // В случае других ошибок
         Err(_) => HttpResponse::InternalServerError().body("Error creating user"),
     }
 }
@@ -80,23 +72,19 @@ pub async fn login_user(
     let mut conn = pool.get().unwrap();
     eprintln!("LOGIN");
 
-    // Ищем пользователя по тегу
     match users::table.filter(users::tag.eq(&user_data.tag)).first::<User>(&mut conn) {
         Ok(user) => {
-            // Проверяем введенный пароль с хешем в базе
             match verify(&user_data.password, &user.password) {
                 Ok(is_valid) => {
                     if is_valid {
-                        // Пароль верный, обновляем поле last_seen
                         let updated_user = diesel
                             ::update(users::table)
-                            .filter(users::tag.eq(&user.tag)) // Находим пользователя по тегу
-                            .set(users::last_seen.eq(Utc::now().naive_utc())) // Обновляем last_seen на текущее время
+                            .filter(users::tag.eq(&user.tag))
+                            .set(users::last_seen.eq(Utc::now().naive_utc()))
                             .execute(&mut conn);
 
                         match updated_user {
                             Ok(_) => {
-                                // Сохраняем идентификатор пользователя в сессии
                                 session.insert("user_tag", user.tag).unwrap();
                                 HttpResponse::Ok().body("Login successful")
                             }
@@ -106,24 +94,16 @@ pub async fn login_user(
                                 ),
                         }
                     } else {
-                        // Пароль неверный
                         HttpResponse::Unauthorized().body("Invalid credentials")
                     }
                 }
                 Err(_) => {
-                    // Ошибка при проверке пароля
                     HttpResponse::InternalServerError().body("Password verification failed")
                 }
             }
         }
-        Err(diesel::result::Error::NotFound) => {
-            // Если пользователь не найден
-            HttpResponse::NotFound().body("User not found")
-        }
-        Err(_) => {
-            // Обработка других ошибок
-            HttpResponse::InternalServerError().body("Error logging in")
-        }
+        Err(diesel::result::Error::NotFound) => { HttpResponse::NotFound().body("User not found") }
+        Err(_) => { HttpResponse::InternalServerError().body("Error logging in") }
     }
 }
 
@@ -133,19 +113,16 @@ pub async fn health(data: web::Data<u64>) -> HttpResponse {
 
 pub async fn get_users(pool: web::Data<DbPool>, session: Session) -> HttpResponse {
     eprintln!("GET_USERS");
-    // Проверяем, есть ли пользователь в сессии
     let user_tag: Option<String> = match session.get("user_tag") {
-        Ok(user_tag) => user_tag, // Успешно получили тег
+        Ok(user_tag) => user_tag,
         Err(_) => {
             return HttpResponse::InternalServerError().body("Failed to read session");
         }
     };
 
     if let Some(_current_user_tag) = user_tag {
-        // Пользователь залогинен, продолжаем обработку
         let mut conn = pool.get().unwrap();
 
-        // Запрашиваем пользователей
         let result = users::table
             .select((tag, nickname, last_seen))
             .load::<(String, String, Option<chrono::NaiveDateTime>)>(&mut conn);
@@ -166,8 +143,6 @@ pub async fn get_users(pool: web::Data<DbPool>, session: Session) -> HttpRespons
             Err(_) => HttpResponse::InternalServerError().body("Error retrieving users"),
         }
     } else {
-        // Пользователь не залогинен
-
         HttpResponse::Unauthorized().body("Unauthorized")
     }
 }
@@ -178,7 +153,6 @@ pub async fn start_convo(
     data: web::Json<StartConvoData>
 ) -> HttpResponse {
     eprintln!("START_CONVO");
-    // Получаем ID текущего пользователя из сессии
     let user_tag: Option<String> = match session.get("user_tag") {
         Ok(user_tag) => user_tag,
         Err(_) => {
@@ -203,7 +177,6 @@ pub async fn start_convo(
             }
         };
 
-        // Ищем получателя по тегу
         let recipient = users::table
             .filter(users::tag.eq(&data.recipient_tag))
             .select(users::id)
@@ -211,7 +184,6 @@ pub async fn start_convo(
 
         match recipient {
             Ok(recipient_id) => {
-                // Проверяем, есть ли уже разговор между пользователями
                 let existing_convo = user_conversations::table
                     .inner_join(conversations::table)
                     .filter(
@@ -227,14 +199,12 @@ pub async fn start_convo(
 
                 match existing_convo {
                     Ok(Some(convo_id)) => {
-                        // Уже существует разговор
                         session.insert("convo_id", convo_id).unwrap();
                         HttpResponse::Ok().json(ConversationResponse {
                             conversation_id: convo_id,
                         })
                     }
                     Ok(_) => {
-                        // Создаем новый разговор
                         let new_convo_id: i32 = diesel
                             ::insert_into(conversations::table)
                             .default_values()
@@ -242,7 +212,6 @@ pub async fn start_convo(
                             .get_result(&mut conn)
                             .expect("Failed to create conversation");
 
-                        // Добавляем обоих пользователей в таблицу user_conversations
                         let user_convos = vec![
                             (current_user_id, new_convo_id),
                             (recipient_id, new_convo_id)
@@ -291,7 +260,6 @@ pub async fn get_convos(pool: web::Data<DbPool>, session: Session) -> HttpRespon
                 return HttpResponse::InternalServerError().body("Failed to get user ID");
             }
         };
-        // Получаем все переписки пользователя
         let convos = user_conversations::table
             .inner_join(conversations::table)
             .filter(user_conversations::user_id.eq(current_user_id))
@@ -303,7 +271,6 @@ pub async fn get_convos(pool: web::Data<DbPool>, session: Session) -> HttpRespon
                 let mut convo_info: Vec<ConversationInfo> = Vec::new();
 
                 for convo_id in convo_ids {
-                    // Получаем последнее сообщение в переписке
                     let last_message = messages::table
                         .filter(messages::conversation_id.eq(convo_id))
                         .order(messages::sent_at.desc())
@@ -311,7 +278,6 @@ pub async fn get_convos(pool: web::Data<DbPool>, session: Session) -> HttpRespon
                         .optional()
                         .unwrap();
 
-                    // Получаем другого участника переписки
                     let other_participant = user_conversations::table
                         .inner_join(users::table)
                         .filter(user_conversations::conversation_id.eq(convo_id))
@@ -362,7 +328,6 @@ pub async fn send_message(
                 return HttpResponse::InternalServerError().body("Failed to get user ID");
             }
         };
-        // Проверяем, принадлежит ли пользователь к этой переписке
         let user_in_convo = user_conversations::table
             .filter(user_conversations::user_id.eq(current_user_id))
             .filter(user_conversations::conversation_id.eq(convo_id))
@@ -411,7 +376,6 @@ pub async fn get_messages(
                 return HttpResponse::InternalServerError().body("Failed to get user ID");
             }
         };
-        // Проверяем, принадлежит ли пользователь к этой переписке
         let user_in_convo = user_conversations::table
             .filter(user_conversations::user_id.eq(current_user_id))
             .filter(user_conversations::conversation_id.eq(convo_id))
@@ -432,7 +396,6 @@ pub async fn get_messages(
             .unwrap();
 
         if let Some(other_id) = other_participant_id {
-            // Получаем ник другого участника
             let participant_nickname = match get_nickname_by_id(&pool, other_id).await {
                 Ok(nick) => nick,
                 Err(_) => {
@@ -441,7 +404,6 @@ pub async fn get_messages(
                     );
                 }
             };
-            // Получаем сообщения
             let messages = messages::table
                 .filter(messages::conversation_id.eq(convo_id))
                 .load::<Message>(&mut conn)
@@ -466,7 +428,6 @@ pub async fn backup_convo(pool: web::Data<DbPool>, path: web::Path<i32>) -> Http
     let convo_id = path.into_inner();
     let mut conn = pool.get().unwrap();
 
-    // Получаем теги участников переписки
     let user_tags: Vec<String> = match
         user_conversations::table
             .filter(user_conversations::conversation_id.eq(convo_id))
@@ -484,17 +445,15 @@ pub async fn backup_convo(pool: web::Data<DbPool>, path: web::Path<i32>) -> Http
         return HttpResponse::NotFound().body("No participants found for this conversation");
     }
 
-    // Генерация имени бэкапа на основе user_tags
     let backup_name = {
         let mut tags = user_tags.clone();
-        tags.sort(); // Сортируем теги для предсказуемости
+        tags.sort();
         let joined = tags.join("_");
         let mut hasher = Sha256::new();
         hasher.update(joined.as_bytes());
-        format!("{:x}", hasher.finalize()) // Преобразуем в строку hex
+        format!("{:x}", hasher.finalize())
     };
 
-    // Получаем сообщения переписки
     let messages_data: Vec<(String, String)> = match
         messages::table
             .filter(messages::conversation_id.eq(convo_id))
@@ -511,7 +470,6 @@ pub async fn backup_convo(pool: web::Data<DbPool>, path: web::Path<i32>) -> Http
         }
     };
 
-    // Создаем временный JSON файл с сообщениями
     let backup_dir = "backups";
     let backup_path = format!("{}/{}.zip", backup_dir, backup_name);
     if !Path::new(backup_dir).exists() {
@@ -522,7 +480,6 @@ pub async fn backup_convo(pool: web::Data<DbPool>, path: web::Path<i32>) -> Http
     let temp_json_file = File::create(&temp_json_path).unwrap();
     serde_json::to_writer(&temp_json_file, &messages_data).unwrap();
 
-    // Создаем ZIP архив
     let zip_file = File::create(&backup_path).unwrap();
     let mut zip = zip::ZipWriter::new(zip_file);
     let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
@@ -536,13 +493,11 @@ pub async fn backup_convo(pool: web::Data<DbPool>, path: web::Path<i32>) -> Http
     zip.write_all(&buffer).unwrap();
     zip.finish().unwrap();
 
-    // Удаляем временный JSON файл
     fs::remove_file(temp_json_path).unwrap();
 
     HttpResponse::Ok().body(format!("Backup created"))
 }
 
-/// Позволяет скачать бэкап
 pub async fn download_backup(path: web::Path<String>) -> HttpResponse {
     eprintln!("DOWNLOAD_BACKUP");
     let backup_name = path.into_inner();

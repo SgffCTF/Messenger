@@ -37,10 +37,8 @@ table! {
     }
 }
 
-// Указываем связь между user_conversations и conversations
 joinable!(user_conversations -> conversations (conversation_id));
 
-// Указываем связь между user_conversations и users
 joinable!(user_conversations -> users (user_id));
 
 allow_tables_to_appear_in_same_query!(users, conversations, user_conversations);
