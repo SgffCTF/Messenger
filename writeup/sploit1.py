@@ -3,7 +3,7 @@ import hashlib
 import json
 from checklib import *
 
-URL = 'http://0.0.0.0:8080'
+URL = 'http://89.169.167.196:6969'
 
 with open('/home/kali/Desktop/VSCode_files/STUDY/kursach/writeup/attack_data.json', 'r') as f:
     attack_data = json.load(f)
