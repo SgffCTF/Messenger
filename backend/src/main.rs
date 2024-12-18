@@ -3,6 +3,7 @@ use actix_files as fs;
 use actix_session::{ SessionMiddleware, storage::CookieSessionStore };
 use actix_cors::Cors;
 use dotenv::dotenv;
+use std::env;
 
 mod db;
 mod models;
@@ -30,9 +31,11 @@ pub async fn convo_form() -> impl Responder {
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
     let start_server = chrono::Utc::now().timestamp() as u64;
+    let host = env::var("HOST").expect("HOST must be set");
+    let port = env::var("PORT").expect("PORT must be set");
 
     let pool = db::establish_connection();
-    println!("Server started at http://0.0.0.0:8080!");
+    println!("Server started at http://{}:{}!", host, port);
     HttpServer::new(move || {
         let cors = Cors::permissive();
 
@@ -66,6 +69,6 @@ async fn main() -> std::io::Result<()> {
             .route("/backup/{hash}.zip", web::get().to(handlers::download_backup))
             .route("dashboard", web::get().to(dashboard))
     })
-        .bind("0.0.0.0:8080")?
+        .bind(format!("{host}:{port}"))?
         .run().await
 }

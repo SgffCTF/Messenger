@@ -4,10 +4,12 @@ services:
     build:
       context: ./backend
     ports: 
-      - 8080:8080
+      - 6969:6969
     environment:
       - DATABASE_URL=postgres://postgres:password@db:5432/database
       - POSTGRES_PASSWORD=password
+      - PORT=6969
+      - HOST=0.0.0.0
     volumes:
       - backups:/app/backups/
     depends_on:

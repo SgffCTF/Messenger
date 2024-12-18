@@ -63,7 +63,7 @@
             const tag = document.getElementById('tag').value;
             const password = document.getElementById('password').value;
 
-            const response = await fetch('http://0.0.0.0:8080/login', {
+            const response = await fetch('/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

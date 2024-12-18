@@ -3,3 +3,5 @@
 writeup/sploit2/target
 writeup/*.zip
 writeup/*.json
+writeup/attack_data.jso
+service.zip
