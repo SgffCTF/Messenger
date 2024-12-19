@@ -37,7 +37,6 @@ for user in users:
         tags.append(user['tag'])
 
 if len(tags) != 2:
-    print('ПИЗДААААА')
     exit(1)
 
 r = requests.post(f'{URL}/backup/{attack_data["convo_id"]}')
