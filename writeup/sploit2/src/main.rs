@@ -1,4 +1,3 @@
-#[allow(unused_imports)]
 use reqwest::Client;
 use reqwest::cookie::Jar;
 use reqwest::StatusCode;
@@ -6,9 +5,7 @@ use serde_json::Value;
 use std::sync::Mutex;
 use std::fs;
 use std::sync::Arc;
-#[allow(unused_imports)]
-use actix_web::{ web, App, HttpServer, Responder };
-#[allow(unused_imports)]
+use actix_web::{ web, App, HttpServer };
 use actix_session::{ SessionMiddleware, storage::CookieSessionStore, Session };
 use actix_web::{ cookie::Key, HttpResponse };
 
@@ -66,7 +63,7 @@ async fn run_server(start_time: u64, tags: Vec<String>) -> std::io::Result<()> {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let url = "http://0.0.0.0:8080";
+    let url = "http://89.169.167.196:6969";
 
     // Чтение attack_data.json
     let attack_data: Value = {
