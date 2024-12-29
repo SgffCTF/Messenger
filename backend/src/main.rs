@@ -1,7 +1,6 @@
 use actix_web::{ web, App, HttpServer, Responder };
 use actix_files as fs;
 use actix_session::{ SessionMiddleware, storage::CookieSessionStore };
-use actix_cors::Cors;
 use dotenv::dotenv;
 use std::env;
 
@@ -37,8 +36,6 @@ async fn main() -> std::io::Result<()> {
     let pool = db::establish_connection();
     println!("Server started at http://{}:{}!", host, port);
     HttpServer::new(move || {
-        let cors = Cors::permissive();
-
         let session = SessionMiddleware::builder(
             CookieSessionStore::default(),
             utils::generate_session_key(start_server)
@@ -51,7 +48,6 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(start_server.clone()))
             .wrap(session)
-            .wrap(cors)
             .service(fs::Files::new("/static", "./static").show_files_listing())
             .route("/register", web::post().to(handlers::register_user))
             .route("/register", web::get().to(register_form))
