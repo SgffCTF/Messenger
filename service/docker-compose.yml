@@ -17,7 +17,7 @@ services:
     command: ["./wait-for-postgres.sh", "db", "./target/release/backend"]
   db:
     restart: on-failure
-    image: postgres
+    image: postgres:17.5
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
