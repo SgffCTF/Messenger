@@ -2,7 +2,7 @@ import requests
 from checklib import BaseChecker
 import hashlib
 
-PORT = 8080
+PORT = 6969
 TIMEOUT = 5
 
 class MessengerApi:
