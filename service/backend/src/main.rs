@@ -50,7 +50,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(session)
             .service(fs::Files::new("/static", "./static").show_files_listing())
             .route("/register", web::post().to(handlers::register_user))
-            .route("/register", web::get().to(register_form))
+            .route("/", web::get().to(register_form))
             .route("/login", web::post().to(handlers::login_user))
             .route("/login", web::get().to(login_form))
             .route("/users", web::get().to(handlers::get_users))

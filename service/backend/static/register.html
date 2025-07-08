@@ -21,28 +21,55 @@
             padding: 40px;
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            width: 350px;
         }
-        h2 { margin-bottom: 20px; font-size: 24px; }
+        h2 { 
+            margin-bottom: 20px; 
+            font-size: 24px; 
+            text-align: center;
+        }
         input {
             display: block;
             width: 100%;
             padding: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             font-size: 18px;
             background-color: #3c3c3c;
             color: #ffffff;
             border: 1px solid #444;
+            border-radius: 5px;
+            box-sizing: border-box;
         }
         button {
             padding: 15px 30px;
             font-size: 18px;
-            background-color: #4CAF50;
             color: white;
             border: none;
             cursor: pointer;
             width: 100%;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            transition: background-color 0.3s;
         }
-        button:hover { background-color: #45a049; }
+        #submitBtn {
+            background-color: #4CAF50;
+        }
+        #submitBtn:hover { 
+            background-color: #45a049; 
+        }
+        #loginBtn {
+            background-color: #3c3c3c;
+            border: 1px solid #444;
+        }
+        #loginBtn:hover {
+            background-color: #4c4c4c;
+        }
+        p#errorMessage {
+            color: #ff4444;
+            display: none;
+            text-align: center;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -52,32 +79,43 @@
             <input type="text" id="tag" placeholder="Тег" required>
             <input type="text" id="nickname" placeholder="Никнейм" required>
             <input type="password" id="password" placeholder="Пароль" required>
-            <button type="submit">Зарегистрироваться</button>
+            <button id="submitBtn" type="submit">Зарегистрироваться</button>
         </form>
-        <p id="errorMessage" style="color: red; display: none;">Ошибка регистрации.</p>
+        <button id="loginBtn" type="button">Есть аккаунт? Вход</button>
+        <p id="errorMessage">Ошибка регистрации.</p>
     </div>
 
     <script>
         document.getElementById('registerForm').addEventListener('submit', async function (e) {
             e.preventDefault();
+            document.getElementById('errorMessage').style.display = 'none';
 
             const tag = document.getElementById('tag').value;
             const nickname = document.getElementById('nickname').value;
             const password = document.getElementById('password').value;
 
-            const response = await fetch('/register', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ tag, nickname, password }),
-            });
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ tag, nickname, password }),
+                });
 
-            if (response.ok) {
-                window.location.href = '/login';
-            } else {
+                if (response.ok) {
+                    window.location.href = '/login';
+                } else {
+                    document.getElementById('errorMessage').style.display = 'block';
+                }
+            } catch (error) {
                 document.getElementById('errorMessage').style.display = 'block';
             }
+        });
+
+        // Обработчик для кнопки входа
+        document.getElementById('loginBtn').addEventListener('click', function() {
+            window.location.href = '/login';
         });
     </script>
 </body>

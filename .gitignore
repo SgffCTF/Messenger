@@ -1,5 +1,6 @@
 /.vscode
 /backend/target
+/service/backend/target
 writeup/sploit2/target
 writeup/*.zip
 writeup/*.json
