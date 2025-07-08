@@ -165,7 +165,9 @@
             loadCurrentUser().then(() => {
                 loadUsers();
                 loadConversations();
-        })
+            }).catch((e) => {
+                window.location.href = "/";
+            });
     }
 
     init();

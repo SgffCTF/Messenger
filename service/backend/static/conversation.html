@@ -111,6 +111,7 @@
 <script>
     let currentUserId = null;
     let currentConvoId = null;
+    let timer = null;
 
     function scrollToBottom() {
         const messagesDiv = document.getElementById('messages');
@@ -134,19 +135,6 @@
         }
     }
 
-    async function loadConversationInfo() {
-        try {
-            const response = await fetch(`/convo/${currentConvoId}`, {
-                method: 'GET',
-                credentials: 'include'
-            });
-            const convoInfo = await response.json();
-            const headerDiv = document.getElementById('conversation-header');
-            headerDiv.textContent = `Переписка с ${convoInfo.participant_nickname}`;
-        } catch (error) {
-            console.error('Ошибка при загрузке информации о переписке:', error);
-        }
-    }
     async function loadMessages() {
         try {
             const response = await fetch(`/convo/${currentConvoId}`, {
@@ -210,6 +198,7 @@
             });
 
             if (response.ok) {
+                clearInterval(timer);
                 await loadMessages();
                 messageInput.value = '';
                 scrollToBottom();
@@ -220,17 +209,16 @@
             console.error('Ошибка при отправке сообщения:', error);
         }
     }
-    function startMessagePolling() {
-        setInterval(loadMessages, 10000);
-    }
+
     function init() {
         const pathParts = window.location.pathname.split('/');
         currentConvoId = pathParts[2];
 
         loadCurrentUser().then(() => {
-            loadConversationInfo();
             loadMessages();
-            startMessagePolling();
+            timer = setInterval(loadMessages, 1000);
+        }).catch((err) => {
+            window.location.href = "/";
         });
 
         document.getElementById('sendMessageBtn').addEventListener('click', sendMessage);
